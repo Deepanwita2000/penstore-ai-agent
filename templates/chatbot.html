@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aditi - AI Chatbot</title>
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f2f2;
+        }
+
+        .chat-container {
+            width: 400px;
+            height: 550px;
+            margin: 50px auto;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            background: #333;
+            color: white;
+            padding: 15px;
+            border-radius: 10px 10px 0 0;
+        }
+
+        .chat-header h3 {
+            margin: 0;
+        }
+
+        #status {
+            font-size: 12px;
+            color: #90ee90;
+        }
+
+        #chat-box {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .message {
+            margin-bottom: 12px;
+        }
+
+        .user {
+            text-align: right;
+        }
+
+        .user span {
+            background: #333;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 10px;
+            display: inline-block;
+            max-width: 70%;
+        }
+
+        .ai {
+            text-align: left;
+        }
+
+        .ai span {
+            background: #eeeeee;
+            padding: 8px 12px;
+            border-radius: 10px;
+            display: inline-block;
+            max-width: 70%;
+        }
+
+        .input-area {
+            display: flex;
+            padding: 10px;
+            border-top: 1px solid #ddd;
+        }
+
+        #message {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+
+        #send-btn {
+            margin-left: 5px;
+            padding: 10px 15px;
+            background: #333;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        #send-btn:disabled {
+            background: #aaa;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="chat-container">
+
+    <div class="chat-header">
+        <h3>Aditi</h3>
+        <span id="status">Connecting...</span>
+    </div>
+
+    <div id="chat-box"></div>
+
+    <div class="input-area">
+        <input
+            type="text"
+            id="message"
+            placeholder="Type your message..."
+        >
+
+        <button id="send-btn">Send</button>
+    </div>
+
+</div>
+
+
+<script>
+
+    // ------------------------------------
+    // WebSocket connection
+    // ------------------------------------
+
+    const socket = new WebSocket(
+        "ws://" + window.location.host + "/ws/products/chat/"
+    );
+
+
+    // ------------------------------------
+    // Connection opened
+    // ------------------------------------
+
+    socket.onopen = function() {
+
+        $("#status").text("Connected");
+
+    };
+
+
+    // ------------------------------------
+    // Receive message from Django
+    // ------------------------------------
+
+    socket.onmessage = function(event) {
+
+        const data = JSON.parse(event.data);
+
+
+        // Backend connected message
+        if (data.type === "connected") {
+
+            $("#status").text("Connected");
+
+        }
+
+
+        // AI response chunks
+        if (data.type === "chunk") {
+
+            // If there is no current AI message,
+            // create one
+            if (!window.currentAIMessage) {
+
+                const message = $(`
+                    <div class="message ai">
+                        <span></span>
+                    </div>
+                `);
+
+                $("#chat-box").append(message);
+
+                window.currentAIMessage = message.find("span");
+            }
+
+
+            // Append streamed content
+            window.currentAIMessage.append(
+                document.createTextNode(data.content)
+            );
+
+
+            // Scroll down
+            $("#chat-box").scrollTop(
+                $("#chat-box")[0].scrollHeight
+            );
+
+        }
+
+
+        // AI response finished
+        if (data.type === "done") {
+
+            window.currentAIMessage = null;
+
+            $("#send-btn").prop("disabled", false);
+
+            $("#message").prop("disabled", false);
+
+        }
+
+
+        // Error
+        if (data.type === "error") {
+
+            $("#chat-box").append(`
+                <div class="message ai">
+                    <span>Error: ${data.message}</span>
+                </div>
+            `);
+
+            $("#send-btn").prop("disabled", false);
+
+            $("#message").prop("disabled", false);
+        }
+
+    };
+
+    // ------------------------------------
+    // Send message
+    // ------------------------------------
+
+    function sendMessage() {
+
+    const message = $("#message").val().trim();
+
+    if (message === "") {
+        return;
+    }
+
+    if (socket.readyState !== WebSocket.OPEN) {
+        alert("WebSocket is not connected.");
+        return;
+    }
+
+    $("#chat-box").append(`
+        <div class="message user">
+            <span>${message}</span>
+        </div>
+    `);
+
+    socket.send(JSON.stringify({
+        message: message
+    }));
+
+    $("#message").val("");
+
+    $("#send-btn").prop("disabled", true);
+    $("#message").prop("disabled", true);
+
+    $("#chat-box").scrollTop(
+        $("#chat-box")[0].scrollHeight
+    );
+}
+    // ------------------------------------
+    // Send button
+    // ------------------------------------
+
+    $("#send-btn").click(function() {
+
+        sendMessage();
+
+    });
+
+    // ------------------------------------
+    // Press Enter to send
+    // ------------------------------------
+
+    $("#message").keypress(function(event) {
+
+        if (event.which === 13) {
+
+            sendMessage();
+
+        }
+
+    });
+
+    // ------------------------------------
+    // WebSocket closed
+    // ------------------------------------
+
+    socket.onclose = function() {
+
+        $("#status").text("Disconnected");
+
+        $("#status").css("color", "red");
+
+    };
+
+</script>
+
+</body>
+</html>
+
