@@ -196,3 +196,5 @@ media/
 # Environment variables
 .env
 **/.env
+
+server.py
